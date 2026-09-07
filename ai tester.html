@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Multi-Provider AI Tester</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: #0f172a; 
+            color: #f8fafc; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-end; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding-bottom: 35px; 
+        }
+        .chat-container { 
+            width: 540px; 
+            height: 740px; 
+            background: #1e293b; 
+            border-radius: 12px; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
+        }
+        .chat-header { 
+            background: #334155; 
+            padding: 15px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            border-bottom: 1px solid #475569; 
+            flex-shrink: 0; 
+        }
+        .row { display: flex; gap: 10px; width: 100%; }
+        .field-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+        .field-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.5px; }
+        .chat-header select, .chat-header input { 
+            width: 100%; 
+            background: #0f172a; 
+            color: #fff; 
+            border: 1px solid #475569; 
+            padding: 9px; 
+            border-radius: 6px; 
+            outline: none; 
+            font-size: 13px; 
+            height: 38px; 
+        }
+        .custom-model-box { display: none; }
+        .chat-messages { 
+            flex: 1; 
+            min-height: 0; 
+            padding: 15px; 
+            overflow-y: auto; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+        }
+        .message { 
+            padding: 10px 14px; 
+            border-radius: 8px; 
+            max-width: 80%; 
+            line-height: 1.4; 
+            word-break: break-word; 
+            font-size: 14px; 
+        }
+        .message.user { background: #3b82f6; align-self: flex-end; }
+        .message.model { background: #475569; align-self: flex-start; }
+        .chat-input-area { 
+            padding: 15px; 
+            background: #334155; 
+            display: flex; 
+            gap: 10px; 
+            border-top: 1px solid #475569; 
+            flex-shrink: 0; 
+        }
+        .chat-input-area input { 
+            flex: 1; 
+            background: #0f172a; 
+            color: #fff; 
+            border: 1px solid #475569; 
+            padding: 10px; 
+            border-radius: 6px; 
+            outline: none; 
+            height: 40px; 
+        }
+        .chat-input-area button { 
+            background: #3b82f6; 
+            color: white; 
+            border: none; 
+            padding: 0 18px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+        }
+        .chat-input-area button:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="row">
+            <div class="field-group">
+                <label for="providerSelect">Provider</label>
+                <select id="providerSelect">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="mistral">Mistral AI</option>
+                    <option value="openrouter">OpenRouter</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label for="modelSelect">Model</label>
+                <select id="modelSelect">
+                    <!-- Populated dynamically -->
+                </select>
+            </div>
+        </div>
+
+        <input type="text" id="customModelInput" class="custom-model-box" placeholder="Type custom model ID (e.g. gpt-4-turbo)..." />
+        
+        <div class="field-group">
+            <label for="apiKey">API Key</label>
+            <input type="password" id="apiKey" placeholder="Paste your API key here..." />
+        </div>
+    </div>
+    
+    <div class="chat-messages" id="chatMessages">
+        <div class="message model">Tester ready with custom favicon linked! Pick your model, drop in your key, and test away.</div>
+    </div>
+
+    <div class="chat-input-area">
+        <input type="text" id="userInput" placeholder="Type a message..." />
+        <button id="sendBtn">Send</button>
+    </div>
+</div>
+
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const apiKeyInput = document.getElementById('apiKey');
+    const providerSelect = document.getElementById('providerSelect');
+    const modelSelect = document.getElementById('modelSelect');
+    const customModelInput = document.getElementById('customModelInput');
+
+    const modelGroups = {
+        gemini: [
+            { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+            { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash' },
+            { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash' },
+            { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+            { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+            { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+            { id: 'custom', name: '⚙️ Enter Custom Model ID...' }
+        ],
+        openai: [
+            { id: 'gpt-5', name: 'GPT-5' },
+            { id: 'gpt-5-mini', name: 'GPT-5 Mini' },
+            { id: 'o3-mini', name: 'o3-mini' },
+            { id: 'o1', name: 'o1' },
+            { id: 'gpt-4o', name: 'GPT-4o' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+            { id: 'custom', name: '⚙️ Enter Custom Model ID...' }
+        ],
+        mistral: [
+            { id: 'mistral-large-latest', name: 'Mistral Large' },
+            { id: 'mistral-medium-latest', name: 'Mistral Medium' },
+            { id: 'mistral-small-latest', name: 'Mistral Small' },
+            { id: 'codestral-latest', name: 'Codestral' },
+            { id: 'ministral-8b-latest', name: 'Ministral 8B' },
+            { id: 'custom', name: '⚙️ Enter Custom Model ID...' }
+        ],
+        openrouter: [
+            { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
+            { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3' },
+            { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
+            { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B' },
+            { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro (OpenRouter)' },
+            { id: 'custom', name: '⚙️ Enter Custom Model ID...' }
+        ]
+    };
+
+    function updateModelDropdown() {
+        const selectedProvider = providerSelect.value;
+        const availableModels = modelGroups[selectedProvider] || [];
+        
+        modelSelect.innerHTML = '';
+        availableModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+        });
+
+        checkCustomOption();
+    }
+
+    function checkCustomOption() {
+        if (modelSelect.value === 'custom') {
+            customModelInput.style.display = 'block';
+            customModelInput.focus();
+        } else {
+            customModelInput.style.display = 'none';
+        }
+    }
+
+    providerSelect.addEventListener('change', updateModelDropdown);
+    modelSelect.addEventListener('change', checkCustomOption);
+    
+    updateModelDropdown();
+
+    async function sendMessage() {
+        const text = userInput.value.trim();
+        const apiKey = apiKeyInput.value.trim();
+        const provider = providerSelect.value;
+        let model = modelSelect.value === 'custom' ? customModelInput.value.trim() : modelSelect.value;
+
+        if (!text) return;
+        if (!apiKey) {
+            alert("Please paste your API key in the API key field!");
+            return;
+        }
+        if (!model) {
+            alert("Please select or enter a valid model name!");
+            return;
+        }
+
+        appendMessage(text, 'user');
+        userInput.value = '';
+
+        const loadingId = appendMessage("Thinking...", 'model');
+
+        try {
+            let response, data, reply;
+
+            if (provider === 'gemini') {
+                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: text }] }] })
+                });
+                data = await response.json();
+                reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } else if (provider === 'openai') {
+                response = await fetch(`https://api.openai.com/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: text }]
+                    })
+                });
+                data = await response.json();
+                reply = data.choices?.[0]?.message?.content;
+            } else if (provider === 'mistral') {
+                response = await fetch(`https://api.mistral.ai/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: text }]
+                    })
+                });
+                data = await response.json();
+                reply = data.choices?.[0]?.message?.content;
+            } else if (provider === 'openrouter') {
+                response = await fetch(`https://openrouter.ai/api/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`,
+                        'HTTP-Referer': window.location.href,
+                        'X-Title': 'Universal AI Tester'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{ role: 'user', content: text }]
+                    })
+                });
+                data = await response.json();
+                reply = data.choices?.[0]?.message?.content;
+            }
+
+            if (reply) {
+                updateMessage(loadingId, reply);
+            } else {
+                updateMessage(loadingId, "Error: " + JSON.stringify(data.error?.message || data));
+            }
+        } catch (err) {
+            updateMessage(loadingId, "Network Error: " + err.message);
+        }
+    }
+
+    function appendMessage(text, sender) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `message ${sender}`;
+        msgDiv.textContent = text;
+        chatMessages.appendChild(msgDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return msgDiv;
+    }
+
+    function updateMessage(element, text) {
+        element.textContent = text;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+</script>
+
+</body>
+</html>
